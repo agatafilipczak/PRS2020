@@ -7,6 +7,7 @@ public class SeparateThread {
         Concurrency thread1 = new Concurrency(1); // create an object of class Concurrent which is a thread
 
         thread1.start();
+        System.out.println("Main loop");
     }
 
     static class Concurrency extends Thread { // this class is a thread in Java, elements in run method will be run on separate Thread

@@ -6,11 +6,13 @@ public class SingleThread {
         for (byte i = 1; i <= 5; i++) {
 
             // sleep stops thread for given ms
+
             try {
                 Thread.sleep(500);
             } catch (InterruptedException e) {
-                System.out.println(e);
+                e.printStackTrace();
             }
+
 
             // write elements to screen
             System.out.println("Loop 1, Iteration: " + i);
