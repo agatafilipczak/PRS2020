@@ -15,8 +15,11 @@ public class Barrier {
         CyclicBarrier barrier = new CyclicBarrier(4);
 
         Thread thread = new Thread(() -> {
+            logger.info("Bariera zalozona");
             try {
+                logger.info("tescik");
                 barrier.await();
+                logger.info("Wszystkie zakonczyly swoje taski, moge dzialac");
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (BrokenBarrierException e) {
