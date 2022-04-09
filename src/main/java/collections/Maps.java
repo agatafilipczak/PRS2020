@@ -14,11 +14,13 @@ public class Maps {
 
     public static void main(String[] args) throws Exception {
         StopWatch stopWatch = new StopWatch();
+
         stopWatch.reset();
         stopWatch.start();
             randomReadSynchronizedMap();
         stopWatch.stop();
         System.out.println("randomReadSynchronizedMap time: " + stopWatch.getTime());
+
         stopWatch.reset();
         stopWatch.start();
             randomReadConcurrentHashMap();
@@ -30,6 +32,7 @@ public class Maps {
         randomWriteSynchronizedMap();
         stopWatch.stop();
         System.out.println("randomWriteSynchronizedMap time: " + stopWatch.getTime());
+
         stopWatch.reset();
         stopWatch.start();
         randomWriteConcurrentHashMap();
@@ -41,6 +44,7 @@ public class Maps {
         randomReadAndWriteSynchronizedMap();
         stopWatch.stop();
         System.out.println("randomReadAndWriteSynchronizedMap time: " + stopWatch.getTime());
+
         stopWatch.reset();
         stopWatch.start();
         randomReadAndWriteConcurrentHashMap();
