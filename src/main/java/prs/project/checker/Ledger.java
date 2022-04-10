@@ -108,6 +108,7 @@ public class Ledger {
                 .filter(m -> m.getTyp().equals(WydarzeniaAkcje.RAPORT_SPRZEDAŻY))
                 .sorted(Comparator.comparing(ReplyToAction::getId)).collect(Collectors.toList());
 
+        log.info("Czas wielowatkowo: {} ;    czas sekwencyjnie: {}", czasStudent, czas);
         assertThat(czasStudent).as("Twój program nie dziala krocej").isLessThan(czas);
         assertThat(liczbaAkceptacjiStudent).as("Twój program zaakceptowal/odrzucil (nie)poprawne zakupy").isEqualTo(liczbaAkceptacji);
         assertThat(liczbaNieakceptacjiStudent).as("Twój program odrzucil/nie odrzucil niepoprawnych zakupow").isEqualTo(liczbaNieakceptacji);

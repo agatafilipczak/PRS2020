@@ -12,10 +12,10 @@ import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_ENUMS_US
 
 @SpringBootApplication
 
-public class SpringRedisApplication {
+public class Spring_AF_Application {
 
     public static void main(String[] args) {
-        SpringApplication.run(SpringRedisApplication.class, args);
+        SpringApplication.run(Spring_AF_Application.class, args);
     }
 
     public class CustomObjectMapper extends ObjectMapper {

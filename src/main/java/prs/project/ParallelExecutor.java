@@ -21,7 +21,6 @@ import prs.project.task.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
@@ -79,22 +78,18 @@ public class ParallelExecutor {
 
     public void threadProcess() {
 
-        Lock lock = new ReentrantLock();
+        ReentrantLock lock_kolejka = new ReentrantLock();
 
         Akcja akcja = null;
-        synchronized (this) {
-            if (!kolejka.isEmpty()) {
-                //trylock jedna odp na raz
-                if (lock.tryLock()) {
-                    try {
-                        // manipulate protected state
-                        akcja = kolejka.pollFirst();
-                    } finally {
-                        lock.unlock();
-                    }
-                }
+        lock_kolejka.lock();
+        if (!kolejka.isEmpty()) {
+            try {
+                akcja = kolejka.pollFirst();
+            } finally {
+                lock_kolejka.unlock();
             }
         }
+
         if (akcja != null) {
             ReplyToAction odpowiedz = procesujAkcje(akcja);
             try {
@@ -106,6 +101,16 @@ public class ParallelExecutor {
     }
 
     private ReplyToAction procesujAkcje(Akcja akcja) {
+
+        /* tworzymy locki = blokady na te obiekty,
+        jak mamy dwa rozne locki, na dwa rozne obiekty to wtedy 2 rone watki moga dzialac w tej metodzie
+        jak zakladamy 2 locki w jednej metodzie, to w kazdym innych metodach musi byc ta sama kolejnosc!
+        wtedy unikamy deadlocka
+        * */
+        ReentrantLock lock_magazyn = new ReentrantLock();
+        ReentrantLock lock_sprzedaz = new ReentrantLock();
+
+
         log.info("Procesuje " + akcja.getTyp());
         ReplyToAction odpowiedz = ReplyToAction.builder()
                 .typ(akcja.getTyp())
@@ -114,113 +119,68 @@ public class ParallelExecutor {
 
         if (WycenaAkcje.PODAJ_CENE.equals(akcja.getTyp())) {
 
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setCena(magazyn.getCeny().get(akcja.getProduct()));
-            if (mojeTypy.contains(Wycena.PROMO_CO_10_WYCEN)) {
-                promoLicznik++;
-                if (promoLicznik == 10)
-                    odpowiedz.setCena(0L);
+            lock_magazyn.lock();
+            try {
+                odpowiedz.setProdukt(akcja.getProduct());
+                odpowiedz.setCena(magazyn.getCeny().get(akcja.getProduct()));
+                if (mojeTypy.contains(Wycena.PROMO_CO_10_WYCEN)) {
+                    promoLicznik++;
+                    if (promoLicznik == 10)
+                        odpowiedz.setCena(0L);
+                }
+            } finally {
+                lock_magazyn.unlock();
             }
         }
-        if (WycenaAkcje.ZMIEN_CENE.equals(akcja.getTyp())) {
-            magazyn.getCeny().put(akcja.getProduct(), akcja.getCena());
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setCenaZmieniona(true);
-            odpowiedz.setCena(akcja.getCena());
+
+
+        if (WydarzeniaAkcje.INWENTARYZACJA.equals(akcja.getTyp())) {
+            lock_magazyn.lock();
+            try {
+                odpowiedz.setStanMagazynów(magazyn.getStanMagazynowy().clone());
+            } finally {
+                lock_magazyn.unlock();
+            }
         }
 
-        if (WydarzeniaAkcje.RAPORT_SPRZEDAŻY.equals(akcja.getTyp())) {
-            odpowiedz.setRaportSprzedaży(sprzedaz.clone());
-        }
-        if (WydarzeniaAkcje.INWENTARYZACJA.equals(akcja.getTyp())) {
-            odpowiedz.setStanMagazynów(magazyn.getStanMagazynowy().clone());
-        }
-        if (WydarzeniaAkcje.WYCOFANIE.equals(akcja.getTyp())) {
-            magazyn.getStanMagazynowy().put(akcja.getProduct(), -9999999L);
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setZrealizowaneWycofanie(true);
-        }
-        if (WydarzeniaAkcje.PRZYWROCENIE.equals(akcja.getTyp())) {
-            magazyn.getStanMagazynowy().put(akcja.getProduct(), 0L);
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setZrealizowanePrzywrócenie(true);
-        }
 
         if (ZamowieniaAkcje.POJEDYNCZE_ZAMOWIENIE.equals(akcja.getTyp())) {
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setLiczba(akcja.getLiczba());
-            Long naMagazynie = magazyn.getStanMagazynowy().get(akcja.getProduct());
-            if (naMagazynie >= akcja.getLiczba()) {
-                odpowiedz.setZrealizowaneZamowienie(true);
-                magazyn.getStanMagazynowy().put(akcja.getProduct(), naMagazynie - akcja.getLiczba());
-                sprzedaz.put(akcja.getProduct(), sprzedaz.get(akcja.getProduct()) + akcja.getLiczba());
-            } else {
-                odpowiedz.setZrealizowaneZamowienie(false);
-            }
-        }
-        if (ZamowieniaAkcje.GRUPOWE_ZAMOWIENIE.equals(akcja.getTyp())) {
-            odpowiedz.setGrupaProduktów(akcja.getGrupaProduktów());
-            odpowiedz.setZrealizowaneZamowienie(true);
-            akcja.getGrupaProduktów().entrySet().stream()
-                    .forEach(produkt -> {
-                        Long naMagazynie = magazyn.getStanMagazynowy().get(produkt.getKey());
-                        if (naMagazynie < produkt.getValue()) {
-                            odpowiedz.setZrealizowaneZamowienie(false);
-                        }
-                    });
-            if (odpowiedz.getZrealizowaneZamowienie()) {
-                akcja.getGrupaProduktów().entrySet().stream()
-                        .forEach(produkt -> {
-                            Long naMagazynie = magazyn.getStanMagazynowy().get(produkt.getKey());
-                            magazyn.getStanMagazynowy().put(produkt.getKey(), naMagazynie - produkt.getValue());
-                            sprzedaz.put(produkt.getKey(), sprzedaz.get(produkt.getKey()) + produkt.getValue());
-                        });
-            }
-        }
-        if (ZamowieniaAkcje.REZERWACJA.equals(akcja.getTyp())) {
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setLiczba(akcja.getLiczba());
-            Long naMagazynie = magazyn.getStanMagazynowy().get(akcja.getProduct());
-            if (naMagazynie >= akcja.getLiczba()) {
-                odpowiedz.setZrealizowaneZamowienie(true);
-                magazyn.getStanMagazynowy().put(akcja.getProduct(), naMagazynie - akcja.getLiczba());
-                rezerwacje.put(akcja.getProduct(), rezerwacje.get(akcja.getProduct()) + akcja.getLiczba());
-            } else {
-                odpowiedz.setZrealizowaneZamowienie(false);
-            }
-        }
-        if (ZamowieniaAkcje.ODBIÓR_REZERWACJI.equals(akcja.getTyp())) {
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setLiczba(akcja.getLiczba());
-            Long naMagazynie = rezerwacje.get(akcja.getProduct());
-            if (naMagazynie >= akcja.getLiczba()) {
-                odpowiedz.setZrealizowaneZamowienie(true);
-                rezerwacje.put(akcja.getProduct(), rezerwacje.get(akcja.getProduct()) - akcja.getLiczba());
-            } else {
-                odpowiedz.setZrealizowaneZamowienie(false);
+
+
+            lock_magazyn.lock();
+            lock_sprzedaz.lock();
+            try {
+                odpowiedz.setProdukt(akcja.getProduct());
+                odpowiedz.setLiczba(akcja.getLiczba());
+                Long naMagazynie = magazyn.getStanMagazynowy().get(akcja.getProduct());
+                if (naMagazynie >= akcja.getLiczba()) {
+                    odpowiedz.setZrealizowaneZamowienie(true);
+                    magazyn.getStanMagazynowy().put(akcja.getProduct(), naMagazynie - akcja.getLiczba());
+                    sprzedaz.put(akcja.getProduct(), sprzedaz.get(akcja.getProduct()) + akcja.getLiczba());
+                } else {
+                    odpowiedz.setZrealizowaneZamowienie(false);
+                }
+            } finally {
+                lock_magazyn.unlock();
             }
         }
 
+
         if (ZaopatrzenieAkcje.POJEDYNCZE_ZAOPATRZENIE.equals(akcja.getTyp())) {
-            odpowiedz.setProdukt(akcja.getProduct());
-            odpowiedz.setLiczba(akcja.getLiczba());
-            Long naMagazynie = magazyn.getStanMagazynowy().get(akcja.getProduct());
-            odpowiedz.setZebraneZaopatrzenie(true);
-            if(magazyn.getStanMagazynowy().get(akcja.getProduct()) >= 0) {
-                magazyn.getStanMagazynowy().put(akcja.getProduct(), naMagazynie + akcja.getLiczba());
+            lock_magazyn.lock();
+            try {
+                odpowiedz.setProdukt(akcja.getProduct());
+                odpowiedz.setLiczba(akcja.getLiczba());
+                Long naMagazynie = magazyn.getStanMagazynowy().get(akcja.getProduct());
+                odpowiedz.setZebraneZaopatrzenie(true);
+                if (magazyn.getStanMagazynowy().get(akcja.getProduct()) >= 0) {
+                    magazyn.getStanMagazynowy().put(akcja.getProduct(), naMagazynie + akcja.getLiczba());
+                }
+            } finally {
+                lock_magazyn.unlock();
             }
         }
-        if (ZaopatrzenieAkcje.GRUPOWE_ZAOPATRZENIE.equals(akcja.getTyp())) {
-            odpowiedz.setGrupaProduktów(akcja.getGrupaProduktów());
-            odpowiedz.setZebraneZaopatrzenie(true);
-            akcja.getGrupaProduktów().entrySet().stream()
-                    .forEach(produkt -> {
-                        Long naMagazynie = magazyn.getStanMagazynowy().get(produkt.getKey());
-                        if(magazyn.getStanMagazynowy().get(produkt.getKey()) >= 0) {
-                            magazyn.getStanMagazynowy().put(produkt.getKey(), naMagazynie + produkt.getValue());
-                        }
-                    });
-        }
+
 
         if (SterowanieAkcja.ZAMKNIJ_SKLEP.equals(akcja.getTyp())) {
             odpowiedz.setStanMagazynów(magazyn.getStanMagazynowy());

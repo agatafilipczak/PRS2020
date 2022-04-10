@@ -2,9 +2,9 @@ server:
   port : 8081
 
 ustawienia:
-  numerIndeksu: 287046
-  wycena: "CENA_ZMIENNA"
-  zamowienia: "GRUPOWE"
-  zaopatrzenie: "GRUPOWE"
-  wydarzenia: "RAPORT_SPRZEDAŻY"
-  liczbaZadan: 800
+  numerIndeksu: 433245
+  wycena: "PROMO_CO_10_WYCEN"
+  zamowienia: "POJEDYNCZE"
+  zaopatrzenie: "POJEDYNCZE"
+  wydarzenia: "INWENTARYZACJA"
+  liczbaZadan: 400
